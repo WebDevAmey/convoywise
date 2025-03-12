@@ -17,7 +17,6 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/risk-analysis" element={<Index />} /> {/* Will be implemented in future releases */}
           <Route path="/dashboard" element={<Index />} /> {/* Will be implemented in future releases */}
           <Route path="*" element={<NotFound />} />
         </Routes>

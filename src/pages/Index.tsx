@@ -4,7 +4,6 @@ import NavBar from '@/components/NavBar';
 import Hero from '@/components/Hero';
 import MapView from '@/components/MapView';
 import RouteOptimizer from '@/components/RouteOptimizer';
-import RiskAnalysis from '@/components/RiskAnalysis';
 import AnimatedTransition from '@/components/AnimatedTransition';
 import { getSampleLocations } from '@/utils/mapUtils';
 
@@ -64,7 +63,7 @@ const Index = () => {
               Intelligent Route Planner
             </h2>
             <p className="text-gray-600 text-center max-w-2xl mx-auto mb-12">
-              Plan and optimize your convoy routes with AI-powered analysis to minimize risks and maximize efficiency.
+              Plan and optimize your convoy routes with AI-powered analysis to maximize efficiency.
             </p>
           </AnimatedTransition>
           
@@ -84,12 +83,6 @@ const Index = () => {
             
             <div className="space-y-6">
               <RouteOptimizer onRouteChange={handleRouteChange} />
-              
-              <RiskAnalysis 
-                route={[startPoint, ...waypoints, endPoint]}
-                startLocation={startLocation}
-                endLocation={endLocation}
-              />
             </div>
           </div>
         </section>
@@ -102,29 +95,29 @@ const Index = () => {
             </div>
             
             <h2 className="text-2xl md:text-3xl font-bold text-convoy-text mb-4">
-              Natural Language Processing for Risk Analysis
+              Route Optimization for Efficiency
             </h2>
             
             <p className="text-gray-600 max-w-2xl mx-auto">
-              Our system leverages advanced NLP algorithms to analyze various data sources and provide actionable insights about potential risks along your route, helping you make informed decisions.
+              Our system leverages advanced algorithms to analyze various data sources and provide optimized routes, helping you make informed decisions.
             </p>
             
             <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
               <FeatureCard 
                 title="Data Integration"
-                description="Integrates with multiple data sources including weather services, traffic APIs, and security databases to provide comprehensive risk analysis."
+                description="Integrates with multiple data sources including weather services, traffic APIs, and security databases to provide comprehensive route analysis."
                 delay={0}
               />
               
               <FeatureCard 
                 title="Predictive Analytics"
-                description="Uses machine learning algorithms to predict potential issues before they occur, allowing proactive risk mitigation."
+                description="Uses machine learning algorithms to predict potential issues before they occur, allowing proactive route planning."
                 delay={100}
               />
               
               <FeatureCard 
                 title="Real-time Monitoring"
-                description="Continuously monitors your convoy's progress and provides real-time alerts about changing conditions or emerging risks."
+                description="Continuously monitors your convoy's progress and provides real-time alerts about changing conditions or emerging issues."
                 delay={200}
               />
             </div>
