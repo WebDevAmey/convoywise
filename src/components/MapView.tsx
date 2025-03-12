@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { RiskArea, getSampleRiskAreas, findOptimalRoute } from '@/utils/mapUtils';
+import { RiskArea, getSampleRiskAreas, findOptimalRoute, generateAlternativeRoutes } from '@/utils/mapUtils';
 import AnimatedTransition from './AnimatedTransition';
 
 // Temporary Mapbox token for demo - in production this should be stored securely
@@ -14,7 +14,10 @@ interface MapViewProps {
   waypoints?: Array<[number, number]>;
   riskAreas?: RiskArea[];
   showOptimizedRoute?: boolean;
+  showAlternativeRoutes?: boolean;
+  selectedRouteIndex?: number;
   className?: string;
+  safetyPreference?: number; // 0-100, 100 means maximum safety
 }
 
 const MapView: React.FC<MapViewProps> = ({
@@ -23,12 +26,14 @@ const MapView: React.FC<MapViewProps> = ({
   waypoints = [],
   riskAreas = getSampleRiskAreas(),
   showOptimizedRoute = true,
+  showAlternativeRoutes = true,
+  selectedRouteIndex = 0,
+  safetyPreference = 50,
   className = ''
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const [route, setRoute] = useState<Array<[number, number]>>([]);
-  const [optimizedRoute, setOptimizedRoute] = useState<Array<[number, number]>>([]);
+  const [routes, setRoutes] = useState<Array<Array<[number, number]>>>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   // Initialize the map
@@ -66,12 +71,26 @@ const MapView: React.FC<MapViewProps> = ({
     };
   }, []);
 
+  // Generate routes when inputs change
+  useEffect(() => {
+    if (startPoint && endPoint) {
+      // Generate optimized route with safety preference
+      const optimizedRoute = findOptimalRoute(startPoint, endPoint, riskAreas, safetyPreference);
+      
+      // Generate alternative routes
+      const alternativeRoutes = generateAlternativeRoutes(startPoint, endPoint, riskAreas, 3);
+      
+      // Combine all routes, with the optimized route first
+      setRoutes([optimizedRoute, ...alternativeRoutes]);
+    }
+  }, [startPoint, endPoint, waypoints, riskAreas, safetyPreference]);
+
   // Draw routes and markers when data changes
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || routes.length === 0) return;
 
     // Clear previous layers
-    const layersToRemove = ['route', 'optimized-route', 'risk-areas', 'point-markers'];
+    const layersToRemove = ['route', 'optimized-route', 'risk-areas', 'point-markers', 'alternative-routes'];
     layersToRemove.forEach(layer => {
       if (map.current?.getLayer(layer)) {
         map.current.removeLayer(layer);
@@ -81,23 +100,15 @@ const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    // Combine start, waypoints, and end into a basic route
-    const fullRoute = [startPoint, ...waypoints, endPoint];
-    setRoute(fullRoute);
-
-    // Generate optimized route considering risk areas
-    const newOptimizedRoute = findOptimalRoute(startPoint, endPoint, riskAreas);
-    setOptimizedRoute(newOptimizedRoute);
-
     // Add risk areas
     map.current.addSource('risk-areas', {
       type: 'geojson',
       data: {
         type: 'FeatureCollection',
         features: riskAreas.map(area => ({
-          type: 'Feature',
+          type: 'Feature' as const,
           geometry: {
-            type: 'Point',
+            type: 'Point' as const,
             coordinates: [area.center[1], area.center[0]] // [lng, lat] format
           },
           properties: {
@@ -138,38 +149,51 @@ const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    // Add route source
-    map.current.addSource('route', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: fullRoute.map(point => [point[1], point[0]]) // [lng, lat] format
-        }
-      }
-    });
+    // Add all alternative routes
+    if (showAlternativeRoutes && routes.length > 1) {
+      routes.forEach((route, index) => {
+        // Skip the selected route as it will be shown as the optimal route
+        if (index === selectedRouteIndex) return;
+        
+        const sourceId = `route-alt-${index}`;
+        const layerId = `route-alt-${index}`;
+        
+        // Add route source
+        map.current!.addSource(sourceId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: route.map(point => [point[1], point[0]]) // [lng, lat] format
+            }
+          }
+        });
 
-    // Add the original route layer
-    map.current.addLayer({
-      id: 'route',
-      type: 'line',
-      source: 'route',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#888',
-        'line-width': 4,
-        'line-opacity': showOptimizedRoute ? 0.4 : 0.8,
-        'line-dasharray': [2, 1]
-      }
-    });
+        // Add the route layer
+        map.current!.addLayer({
+          id: layerId,
+          type: 'line',
+          source: sourceId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#888',
+            'line-width': 3,
+            'line-opacity': 0.4,
+            'line-dasharray': [2, 1]
+          }
+        });
+      });
+    }
 
-    // Add optimized route if requested
-    if (showOptimizedRoute && newOptimizedRoute.length > 1) {
+    // Add the selected/optimized route
+    if (routes[selectedRouteIndex]) {
+      const selectedRoute = routes[selectedRouteIndex];
+      
       map.current.addSource('optimized-route', {
         type: 'geojson',
         data: {
@@ -177,7 +201,7 @@ const MapView: React.FC<MapViewProps> = ({
           properties: {},
           geometry: {
             type: 'LineString',
-            coordinates: newOptimizedRoute.map(point => [point[1], point[0]]) // [lng, lat] format
+            coordinates: selectedRoute.map(point => [point[1], point[0]]) // [lng, lat] format
           }
         }
       });
@@ -199,7 +223,7 @@ const MapView: React.FC<MapViewProps> = ({
       });
     }
 
-    // Add markers source
+    // Add markers source for start, end, and waypoints
     map.current.addSource('point-markers', {
       type: 'geojson',
       data: {
@@ -207,9 +231,9 @@ const MapView: React.FC<MapViewProps> = ({
         features: [
           // Start point marker
           {
-            type: 'Feature',
+            type: 'Feature' as const,
             geometry: {
-              type: 'Point',
+              type: 'Point' as const,
               coordinates: [startPoint[1], startPoint[0]] // [lng, lat] format
             },
             properties: {
@@ -219,9 +243,9 @@ const MapView: React.FC<MapViewProps> = ({
           },
           // End point marker
           {
-            type: 'Feature',
+            type: 'Feature' as const,
             geometry: {
-              type: 'Point',
+              type: 'Point' as const,
               coordinates: [endPoint[1], endPoint[0]] // [lng, lat] format
             },
             properties: {
@@ -231,9 +255,9 @@ const MapView: React.FC<MapViewProps> = ({
           },
           // Waypoint markers
           ...waypoints.map((point, index) => ({
-            type: 'Feature',
+            type: 'Feature' as const,
             geometry: {
-              type: 'Point',
+              type: 'Point' as const,
               coordinates: [point[1], point[0]] // [lng, lat] format
             },
             properties: {
@@ -265,27 +289,31 @@ const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    // Fit the map to show the entire route
-    const coordinates = [...fullRoute, ...newOptimizedRoute];
-    const bounds = coordinates.reduce((bounds, coord) => {
-      return bounds.extend([coord[1], coord[0]]);
-    }, new mapboxgl.LngLatBounds([coordinates[0][1], coordinates[0][0]], [coordinates[0][1], coordinates[0][0]]));
-    
-    map.current.fitBounds(bounds, {
-      padding: 80,
-      duration: 1000
-    });
+    // Fit the map to show the entire route area
+    const allCoordinates = [...routes.flat()];
+    if (allCoordinates.length > 0) {
+      const bounds = allCoordinates.reduce((bounds, coord) => {
+        return bounds.extend([coord[1], coord[0]]);
+      }, new mapboxgl.LngLatBounds([allCoordinates[0][1], allCoordinates[0][0]], [allCoordinates[0][1], allCoordinates[0][0]]));
+      
+      map.current.fitBounds(bounds, {
+        padding: 80,
+        duration: 1000
+      });
+    }
 
     // Popup for markers and risk areas
     map.current.on('click', 'point-markers', (e) => {
       if (!e.features?.[0]) return;
       
       const feature = e.features[0];
-      const coordinates = feature.geometry.coordinates.slice();
+      const coords = feature.geometry.type === 'Point' ? feature.geometry.coordinates.slice() : null;
+      if (!coords) return;
+      
       const title = feature.properties?.title || 'Marker';
       
       new mapboxgl.Popup()
-        .setLngLat(coordinates)
+        .setLngLat(coords as [number, number])
         .setHTML(`<div class="font-medium text-convoy-text">${title}</div>`)
         .addTo(map.current!);
     });
@@ -294,12 +322,14 @@ const MapView: React.FC<MapViewProps> = ({
       if (!e.features?.[0]) return;
       
       const feature = e.features[0];
-      const coordinates = feature.geometry.coordinates.slice();
+      const coords = feature.geometry.type === 'Point' ? feature.geometry.coordinates.slice() : null;
+      if (!coords) return;
+      
       const riskLevel = feature.properties?.riskLevel || 'unknown';
       const description = feature.properties?.description || 'Risk area';
       
       new mapboxgl.Popup()
-        .setLngLat(coordinates)
+        .setLngLat(coords as [number, number])
         .setHTML(`
           <div class="text-convoy-text">
             <div class="font-medium">Risk Area: ${riskLevel.toUpperCase()}</div>
@@ -326,7 +356,7 @@ const MapView: React.FC<MapViewProps> = ({
       map.current!.getCanvas().style.cursor = '';
     });
 
-  }, [startPoint, endPoint, waypoints, riskAreas, mapLoaded, showOptimizedRoute]);
+  }, [startPoint, endPoint, waypoints, riskAreas, mapLoaded, routes, selectedRouteIndex, showOptimizedRoute, showAlternativeRoutes]);
 
   return (
     <AnimatedTransition className={`rounded-2xl overflow-hidden shadow-xl relative ${className}`}>
@@ -336,10 +366,12 @@ const MapView: React.FC<MapViewProps> = ({
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-md border border-gray-100">
         <h3 className="text-sm font-medium mb-2 text-convoy-text">Legend</h3>
         <div className="space-y-2 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-1 bg-gray-500 rounded"></div>
-            <span>Original Route</span>
-          </div>
+          {showAlternativeRoutes && (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-1 bg-gray-500 rounded"></div>
+              <span>Alternative Routes</span>
+            </div>
+          )}
           {showOptimizedRoute && (
             <div className="flex items-center gap-2">
               <div className="w-4 h-1 bg-convoy-primary rounded"></div>

@@ -4,7 +4,7 @@ import {
   ShieldAlertIcon, 
   CloudRainIcon, 
   ShieldIcon, 
-  RoadIcon, 
+  RoadIcon as RoadIconCustom, 
   CarIcon, 
   LandmarkIcon 
 } from 'lucide-react';
@@ -65,7 +65,7 @@ const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
       case 'security':
         return <ShieldIcon size={16} />;
       case 'infrastructure':
-        return <RoadIcon size={16} />;
+        return <RoadIconCustom size={16} />;
       case 'traffic':
         return <CarIcon size={16} />;
       case 'political':
@@ -210,6 +210,29 @@ const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
         </div>
       </div>
     </AnimatedTransition>
+  );
+};
+
+// Fix the import issue with RoadIcon by defining a custom component
+const RoadIcon = (props: any) => {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={props.size || 24} 
+      height={props.size || 24} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M8 22h8" />
+      <path d="M12 17v5" />
+      <path d="M12 2a4 4 0 0 0-4 4m4-4a4 4 0 0 1 4 4m-4-4v5" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 };
 

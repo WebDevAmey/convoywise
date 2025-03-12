@@ -63,16 +63,16 @@ export const formatDuration = (hours: number): string => {
 };
 
 export const getSampleLocations = () => [
-  { name: "New York", coordinates: [40.7128, -74.0060] },
-  { name: "Los Angeles", coordinates: [34.0522, -118.2437] },
-  { name: "Chicago", coordinates: [41.8781, -87.6298] },
-  { name: "Houston", coordinates: [29.7604, -95.3698] },
-  { name: "Phoenix", coordinates: [33.4484, -112.0740] },
-  { name: "San Antonio", coordinates: [29.4241, -98.4936] },
-  { name: "San Diego", coordinates: [32.7157, -117.1611] },
-  { name: "Dallas", coordinates: [32.7767, -96.7970] },
-  { name: "San Jose", coordinates: [37.3382, -121.8863] },
-  { name: "Austin", coordinates: [30.2672, -97.7431] },
+  { name: "New York", coordinates: [40.7128, -74.0060] as [number, number] },
+  { name: "Los Angeles", coordinates: [34.0522, -118.2437] as [number, number] },
+  { name: "Chicago", coordinates: [41.8781, -87.6298] as [number, number] },
+  { name: "Houston", coordinates: [29.7604, -95.3698] as [number, number] },
+  { name: "Phoenix", coordinates: [33.4484, -112.0740] as [number, number] },
+  { name: "San Antonio", coordinates: [29.4241, -98.4936] as [number, number] },
+  { name: "San Diego", coordinates: [32.7157, -117.1611] as [number, number] },
+  { name: "Dallas", coordinates: [32.7767, -96.7970] as [number, number] },
+  { name: "San Jose", coordinates: [37.3382, -121.8863] as [number, number] },
+  { name: "Austin", coordinates: [30.2672, -97.7431] as [number, number] },
 ];
 
 export const getRandomRiskFactor = (): number => {
@@ -107,7 +107,12 @@ export const getSampleRiskAreas = (): RiskArea[] => [
   },
 ];
 
-export const findOptimalRoute = (start: [number, number], end: [number, number], riskAreas: RiskArea[]): Array<[number, number]> => {
+export const findOptimalRoute = (
+  start: [number, number], 
+  end: [number, number], 
+  riskAreas: RiskArea[],
+  safetyPreference: number = 50
+): Array<[number, number]> => {
   // This is a simplified example
   // In a real application, this would implement a proper routing algorithm like A*
   // that considers risk areas as obstacles or weighted zones
@@ -116,15 +121,26 @@ export const findOptimalRoute = (start: [number, number], end: [number, number],
   const baseRoute = generateRandomRoute(start, end, 3);
   let optimizedRoute = [...baseRoute];
   
-  // Simple algorithm: For each high-risk area, check if any waypoint is inside it
-  // If so, move the waypoint slightly away from the center of the risk area
+  // Apply more aggressive avoidance for higher safety preference
+  const safetyFactor = safetyPreference / 50; // 0-2 scale, 1 is neutral
+  
+  // Simple algorithm: For each risk area, check if any waypoint is inside it
+  // If so, move the waypoint away from the center of the risk area based on safety preference
   riskAreas.forEach(area => {
-    if (area.riskLevel === 'high') {
+    // For high safety preference, avoid medium and high risk areas
+    // For balanced preference, only avoid high risk areas
+    // For low safety preference, don't avoid risk areas much
+    const shouldAvoid = 
+      (area.riskLevel === 'high') || 
+      (area.riskLevel === 'medium' && safetyPreference > 50);
+    
+    if (shouldAvoid) {
       optimizedRoute = optimizedRoute.map(point => {
         const distance = calculateDistance(point, area.center);
+        const riskRadius = area.riskLevel === 'high' ? area.radius : area.radius * 0.7;
         
-        // If point is inside high-risk area
-        if (distance < area.radius) {
+        // If point is inside risk area to avoid
+        if (distance < riskRadius) {
           // Calculate direction from risk center to point
           const direction: [number, number] = [
             point[0] - area.center[0],
@@ -138,7 +154,8 @@ export const findOptimalRoute = (start: [number, number], end: [number, number],
             : [direction[0] / magnitude, direction[1] / magnitude];
           
           // Move point outside the risk area (plus some margin)
-          const moveDistance = (area.radius - distance + 0.05) / 111; // rough conversion to degrees
+          // Apply safety factor - higher safety preference means more deviation
+          const moveDistance = (riskRadius - distance + 0.05) * safetyFactor / 111; // rough conversion to degrees
           return [
             point[0] + normalized[0] * moveDistance,
             point[1] + normalized[1] * moveDistance
@@ -151,4 +168,89 @@ export const findOptimalRoute = (start: [number, number], end: [number, number],
   });
   
   return optimizedRoute;
+};
+
+// Generate multiple alternative routes
+export const generateAlternativeRoutes = (
+  start: [number, number], 
+  end: [number, number], 
+  riskAreas: RiskArea[],
+  count: number = 3
+): Array<Array<[number, number]>> => {
+  const routes: Array<Array<[number, number]>> = [];
+  
+  // Generate different routes by varying the number of waypoints and adding randomness
+  for (let i = 0; i < count; i++) {
+    // Add some randomness to the start and end points for route variation
+    const jitter = 0.02; // Small jitter for route variation
+    const jitteredStart: [number, number] = [
+      start[0] + (Math.random() - 0.5) * jitter,
+      start[1] + (Math.random() - 0.5) * jitter
+    ];
+    
+    const jitteredEnd: [number, number] = [
+      end[0] + (Math.random() - 0.5) * jitter,
+      end[1] + (Math.random() - 0.5) * jitter
+    ];
+    
+    // Generate route with varying number of waypoints
+    const waypoints = 2 + Math.floor(Math.random() * 3); // 2-4 waypoints
+    const route = generateRandomRoute(jitteredStart, jitteredEnd, waypoints);
+    
+    // Add randomized detours for more variety
+    const routeWithDetours = addRandomDetours(route, i % 2 === 0);
+    
+    routes.push(routeWithDetours);
+  }
+  
+  return routes;
+};
+
+// Add some random detours to create more variety in routes
+const addRandomDetours = (route: Array<[number, number]>, useNorthernDetour: boolean): Array<[number, number]> => {
+  if (route.length < 3) return route;
+  
+  const result: Array<[number, number]> = [route[0]]; // Start with the first point
+  
+  // For each segment, possibly add a detour point
+  for (let i = 0; i < route.length - 1; i++) {
+    const start = route[i];
+    const end = route[i + 1];
+    
+    // Add a point between these two with some offset
+    const midpoint: [number, number] = [
+      (start[0] + end[0]) / 2,
+      (start[1] + end[1]) / 2
+    ];
+    
+    // Add an offset perpendicular to the direction
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    
+    // Perpendicular direction (rotate 90 degrees)
+    let perpX = -dy;
+    let perpY = dx;
+    
+    // Normalize and scale
+    const scale = Math.sqrt(perpX * perpX + perpY * perpY);
+    if (scale > 0) {
+      // Make detour direction differ based on useNorthernDetour
+      const directionMultiplier = useNorthernDetour ? 1 : -1;
+      
+      perpX = (perpX / scale) * 0.15 * directionMultiplier; // Adjust scale for detour size
+      perpY = (perpY / scale) * 0.15 * directionMultiplier;
+      
+      // Add detour point
+      const detourPoint: [number, number] = [
+        midpoint[0] + perpX,
+        midpoint[1] + perpY
+      ];
+      
+      result.push(detourPoint);
+    }
+    
+    result.push(end);
+  }
+  
+  return result;
 };

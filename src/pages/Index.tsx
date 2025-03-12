@@ -16,11 +16,27 @@ const Index = () => {
   const [waypoints, setWaypoints] = useState<Array<[number, number]>>([]);
   const [startLocation, setStartLocation] = useState(locations[0].name);
   const [endLocation, setEndLocation] = useState(locations[1].name);
+  const [safetyPreference, setSafetyPreference] = useState(50);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   
-  const handleRouteChange = (start: [number, number], end: [number, number], points: Array<[number, number]>) => {
+  const handleRouteChange = (
+    start: [number, number], 
+    end: [number, number], 
+    points: Array<[number, number]>,
+    safety?: number,
+    routeIndex?: number
+  ) => {
     setStartPoint(start);
     setEndPoint(end);
     setWaypoints(points);
+    
+    if (safety !== undefined) {
+      setSafetyPreference(safety);
+    }
+    
+    if (routeIndex !== undefined) {
+      setSelectedRouteIndex(routeIndex);
+    }
     
     // Update location names
     const startLoc = locations.find(loc => 
@@ -59,6 +75,9 @@ const Index = () => {
                 endPoint={endPoint}
                 waypoints={waypoints}
                 showOptimizedRoute={true}
+                showAlternativeRoutes={true}
+                selectedRouteIndex={selectedRouteIndex}
+                safetyPreference={safetyPreference}
                 className="h-[600px]"
               />
             </div>

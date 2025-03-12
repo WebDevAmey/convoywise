@@ -1,20 +1,27 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCcwIcon, PlusIcon, TrashIcon, ChevronRightIcon, CalculatorIcon } from 'lucide-react';
+import { RefreshCcwIcon, PlusIcon, TrashIcon, ChevronRightIcon, CalculatorIcon, ShieldIcon, ZapIcon, BarChart2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   getSampleLocations, 
   calculateRouteTotalDistance, 
   estimateTravelTime, 
   formatDuration,
-  generateRandomRoute 
+  generateRandomRoute,
+  generateAlternativeRoutes
 } from '@/utils/mapUtils';
 import { generateRiskFactors, calculateRiskScore, getRiskLevel, getRiskColor } from '@/utils/riskAnalysisUtils';
 import AnimatedTransition from './AnimatedTransition';
+import { Slider } from '@/components/ui/slider';
 
 interface RouteOptimizerProps {
-  onRouteChange?: (startPoint: [number, number], endPoint: [number, number], waypoints: Array<[number, number]>) => void;
+  onRouteChange?: (
+    startPoint: [number, number], 
+    endPoint: [number, number], 
+    waypoints: Array<[number, number]>,
+    safetyPreference?: number,
+    selectedRouteIndex?: number
+  ) => void;
   className?: string;
 }
 
@@ -28,6 +35,14 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const [endLocation, setEndLocation] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [safetyPreference, setSafetyPreference] = useState(50); // 0-100 scale (0: speed, 100: safety)
+  const [alternativeRoutes, setAlternativeRoutes] = useState<Array<{
+    distance: number;
+    time: number;
+    riskScore: number;
+    routeIndex: number;
+  }>>([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [optimizationResult, setOptimizationResult] = useState<{
     distance: number;
     time: number;
@@ -40,7 +55,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   // Convert location names to coordinates
   const getCoordinates = (locationName: string): [number, number] => {
     const location = locations.find(loc => loc.name === locationName);
-    return location ? location.coordinates : [0, 0];
+    return location ? location.coordinates as [number, number] : [0, 0];
   };
   
   // Initialize with default values
@@ -58,9 +73,9 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords);
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, selectedRouteIndex);
     }
-  }, [startLocation, endLocation, waypoints, onRouteChange]);
+  }, [startLocation, endLocation, waypoints, safetyPreference, selectedRouteIndex, onRouteChange]);
   
   const handleAddWaypoint = () => {
     if (waypoints.length < 3) {
@@ -91,41 +106,91 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      // Original route for comparison
-      const originalRoute = [startCoords, ...waypointCoords, endCoords];
-      const originalDistance = calculateRouteTotalDistance(originalRoute);
-      const originalTime = estimateTravelTime(originalDistance);
+      // Generate multiple route options (3 alternatives)
+      const routes = generateAlternativeRoutes(startCoords, endCoords, [], 3);
       
-      // Simulated optimized route with minor improvements
-      const optimizedRoute = generateRandomRoute(startCoords, endCoords, waypointCoords.length);
-      const optimizedDistance = calculateRouteTotalDistance(optimizedRoute) * 0.85; // 15% distance reduction
-      const optimizedTime = estimateTravelTime(optimizedDistance) * 0.8; // 20% time reduction
+      // Calculate metrics for each route
+      const routesWithMetrics = routes.map((route, index) => {
+        const distance = calculateRouteTotalDistance(route);
+        const time = estimateTravelTime(distance, safetyPreference < 30 ? 70 : 60); // Higher speed for speed preference
+        const riskFactors = generateRiskFactors(route);
+        const riskScore = calculateRiskScore(riskFactors);
+        
+        return {
+          route,
+          distance,
+          time,
+          riskScore,
+          routeIndex: index
+        };
+      });
       
-      // Calculate risk score
-      const riskFactors = generateRiskFactors(optimizedRoute);
-      const riskScore = calculateRiskScore(riskFactors);
+      // Sort routes based on safety preference
+      // If safety is preferred, prioritize lower risk scores
+      // If speed is preferred, prioritize lower travel time
+      const sortedRoutes = [...routesWithMetrics].sort((a, b) => {
+        // Create a weighted score based on safety preference
+        const aScore = (a.riskScore * (safetyPreference / 100)) + (a.time * (1 - safetyPreference / 100));
+        const bScore = (b.riskScore * (safetyPreference / 100)) + (b.time * (1 - safetyPreference / 100));
+        return aScore - bScore;
+      });
       
-      // Simulate fuel calculations (very simplified)
+      // Set the best route as the first one
+      setSelectedRouteIndex(sortedRoutes[0].routeIndex);
+      
+      // Store alternative routes for display
+      setAlternativeRoutes(sortedRoutes);
+      
+      // Select the best route metrics for display
+      const bestRoute = sortedRoutes[0];
+      
+      // Calculate fuel consumption (simplified)
       const avgFuelConsumptionPerKm = 0.3; // liters per km
-      const originalFuel = originalDistance * avgFuelConsumptionPerKm;
-      const optimizedFuel = optimizedDistance * avgFuelConsumptionPerKm;
+      const fuelUsage = bestRoute.distance * avgFuelConsumptionPerKm;
+      
+      // Calculate savings compared to average of other routes
+      const otherRoutes = sortedRoutes.slice(1);
+      const avgOtherDistance = otherRoutes.reduce((sum, r) => sum + r.distance, 0) / otherRoutes.length;
+      const avgOtherTime = otherRoutes.reduce((sum, r) => sum + r.time, 0) / otherRoutes.length;
+      const avgOtherFuel = avgOtherDistance * avgFuelConsumptionPerKm;
       
       setOptimizationResult({
-        distance: optimizedDistance,
-        time: optimizedTime,
-        fuelUsage: optimizedFuel,
-        riskScore: riskScore,
-        fuelSavings: originalFuel - optimizedFuel,
-        timeSavings: originalTime - optimizedTime
+        distance: bestRoute.distance,
+        time: bestRoute.time,
+        fuelUsage: fuelUsage,
+        riskScore: bestRoute.riskScore,
+        fuelSavings: avgOtherFuel - fuelUsage,
+        timeSavings: avgOtherTime - bestRoute.time
       });
       
       setIsOptimizing(false);
       
       // Notify the change
-      onRouteChange?.(startCoords, endCoords, waypointCoords);
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, sortedRoutes[0].routeIndex);
       
-      toast.success('Route optimized successfully');
+      toast.success('Routes optimized successfully');
     }, 1500);
+  };
+  
+  const handleRouteSelection = (routeIndex: number) => {
+    setSelectedRouteIndex(routeIndex);
+    
+    // Notify parent component of route change
+    if (startLocation && endLocation) {
+      const startCoords = getCoordinates(startLocation);
+      const endCoords = getCoordinates(endLocation);
+      const waypointCoords = waypoints.map(wp => getCoordinates(wp));
+      
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, routeIndex);
+    }
+  };
+  
+  const getSafetySpeedPreferenceLabel = () => {
+    if (safetyPreference < 25) return "Maximum Speed";
+    if (safetyPreference < 40) return "Prioritize Speed";
+    if (safetyPreference < 60) return "Balanced";
+    if (safetyPreference < 80) return "Prioritize Safety";
+    return "Maximum Safety";
   };
   
   const getRiskLevelLabel = (score: number) => {
@@ -208,6 +273,30 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           </div>
         ))}
         
+        {/* Safety vs Speed Preference Slider */}
+        <div className="pt-3 pb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Route Preference: {getSafetySpeedPreferenceLabel()}
+          </label>
+          <div className="flex items-center gap-3">
+            <ZapIcon size={18} className="text-convoy-warning" />
+            <Slider
+              value={[safetyPreference]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={(values) => setSafetyPreference(values[0])}
+              className="flex-1"
+            />
+            <ShieldIcon size={18} className="text-convoy-primary" />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>Speed</span>
+            <span>Balanced</span>
+            <span>Safety</span>
+          </div>
+        </div>
+        
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
           <Button 
             variant="outline" 
@@ -232,9 +321,76 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
             ) : (
               <CalculatorIcon size={16} />
             )}
-            {isOptimizing ? 'Optimizing...' : 'Optimize Route'}
+            {isOptimizing ? 'Optimizing...' : 'Calculate Routes'}
           </Button>
         </div>
+        
+        {/* Alternative Routes Selection */}
+        {alternativeRoutes.length > 0 && (
+          <div className="mt-4 bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-gray-100 animate-fade-in">
+            <h3 className="font-medium text-convoy-text mb-3 flex items-center gap-1.5">
+              <BarChart2Icon size={16} />
+              Available Routes
+            </h3>
+            
+            <div className="space-y-3">
+              {alternativeRoutes.map((route, index) => {
+                const riskLevel = getRiskLevel(route.riskScore);
+                
+                return (
+                  <button 
+                    key={`route-option-${index}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      selectedRouteIndex === route.routeIndex
+                        ? 'bg-convoy-primary/10 border-convoy-primary/30'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                    onClick={() => handleRouteSelection(route.routeIndex)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="font-medium">
+                        Route {index + 1}
+                        {index === 0 && safetyPreference > 50 && (
+                          <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                            Safest
+                          </span>
+                        )}
+                        {index === 0 && safetyPreference < 50 && (
+                          <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                            Fastest
+                          </span>
+                        )}
+                        {index === 0 && safetyPreference === 50 && (
+                          <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                            Balanced
+                          </span>
+                        )}
+                      </div>
+                      <div className={`convoy-badge ${getRiskColor(riskLevel)}`}>
+                        {riskLevel.toUpperCase()}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5">
+                        <ZapIcon size={14} />
+                        <span>{formatDuration(route.time)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <ShieldIcon size={14} />
+                        <span>Risk: {route.riskScore.toFixed(1)}</span>
+                      </div>
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <ChevronRightIcon size={14} />
+                        <span>{route.distance.toFixed(1)} km</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         
         {optimizationResult && (
           <div className="mt-4 bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-gray-100 animate-fade-in">
