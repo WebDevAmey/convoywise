@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { RefreshCcwIcon, PlusIcon, TrashIcon, ChevronRightIcon, CalculatorIcon, ShieldIcon, ZapIcon, BarChart2Icon, TruckIcon, PackageIcon, MountainIcon, BridgeIcon, HomeIcon, AlertTriangleIcon } from 'lucide-react';
+import { RefreshCcwIcon, PlusIcon, TrashIcon, ChevronRightIcon, CalculatorIcon, ShieldIcon, ZapIcon, BarChart2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   getSampleLocations, 
@@ -14,19 +13,6 @@ import {
 import { generateRiskFactors, calculateRiskScore, getRiskLevel, getRiskColor } from '@/utils/riskAnalysisUtils';
 import AnimatedTransition from './AnimatedTransition';
 import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 interface RouteOptimizerProps {
   onRouteChange?: (
@@ -37,32 +23,6 @@ interface RouteOptimizerProps {
     selectedRouteIndex?: number
   ) => void;
   className?: string;
-}
-
-interface AvoidanceOptions {
-  terrain: {
-    denseTerrain: boolean;
-    mountains: boolean;
-    forests: boolean;
-  };
-  infrastructure: {
-    bridges: boolean;
-    tunnels: boolean;
-    narrowRoads: boolean;
-  };
-  settlements: {
-    villages: boolean;
-    urbanAreas: boolean;
-    checkpoints: boolean;
-  };
-}
-
-interface ConvoySpecs {
-  size: 'small' | 'medium' | 'large';
-  vehicles: number;
-  personnel: number;
-  cargo: 'light' | 'medium' | 'heavy';
-  specialEquipment: boolean;
 }
 
 const RouteOptimizer: React.FC<RouteOptimizerProps> = ({ 
@@ -92,39 +52,13 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
     timeSavings: number;
   } | null>(null);
   
-  const [avoidanceOptions, setAvoidanceOptions] = useState<AvoidanceOptions>({
-    terrain: {
-      denseTerrain: false,
-      mountains: false,
-      forests: false
-    },
-    infrastructure: {
-      bridges: false,
-      tunnels: false,
-      narrowRoads: false
-    },
-    settlements: {
-      villages: false,
-      urbanAreas: false,
-      checkpoints: false
-    }
-  });
-  
-  const [convoySpecs, setConvoySpecs] = useState<ConvoySpecs>({
-    size: 'medium',
-    vehicles: 5,
-    personnel: 20,
-    cargo: 'medium',
-    specialEquipment: false
-  });
-  
-  const [prioritizeSafety, setPrioritizeSafety] = useState(false);
-  
+  // Convert location names to coordinates
   const getCoordinates = (locationName: string): [number, number] => {
     const location = locations.find(loc => loc.name === locationName);
     return location ? location.coordinates as [number, number] : [0, 0];
   };
   
+  // Initialize with default values
   useEffect(() => {
     if (locations.length >= 2) {
       setStartLocation(locations[0].name);
@@ -132,6 +66,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
     }
   }, []);
   
+  // Notify parent component when route changes
   useEffect(() => {
     if (startLocation && endLocation) {
       const startCoords = getCoordinates(startLocation);
@@ -144,6 +79,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   
   const handleAddWaypoint = () => {
     if (waypoints.length < 3) {
+      // Find locations not already used
       const usedLocations = [startLocation, endLocation, ...waypoints];
       const availableLocations = locations.filter(loc => !usedLocations.includes(loc.name));
       
@@ -164,87 +100,55 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const handleOptimizeRoute = () => {
     setIsOptimizing(true);
     
+    // Simulate optimization process
     setTimeout(() => {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
+      // Generate multiple route options (3 alternatives)
       const routes = generateAlternativeRoutes(startCoords, endCoords, [], 3);
       
+      // Calculate metrics for each route
       const routesWithMetrics = routes.map((route, index) => {
         const distance = calculateRouteTotalDistance(route);
-        
-        let speedAdjustment = 0;
-        if (convoySpecs.size === 'large') speedAdjustment -= 10;
-        else if (convoySpecs.size === 'small') speedAdjustment += 5;
-        
-        if (convoySpecs.cargo === 'heavy') speedAdjustment -= 10;
-        else if (convoySpecs.cargo === 'light') speedAdjustment += 5;
-        
-        const baseSpeed = safetyPreference < 30 ? 70 : 60;
-        const adjustedSpeed = Math.max(30, baseSpeed + speedAdjustment);
-        
-        const time = estimateTravelTime(distance, adjustedSpeed);
-        
+        const time = estimateTravelTime(distance, safetyPreference < 30 ? 70 : 60); // Higher speed for speed preference
         const riskFactors = generateRiskFactors(route);
-        
-        let riskAdjustment = 0;
-        
-        if (avoidanceOptions.terrain.denseTerrain) riskAdjustment += 10;
-        if (avoidanceOptions.terrain.mountains) riskAdjustment += 15;
-        if (avoidanceOptions.terrain.forests) riskAdjustment += 5;
-        
-        if (avoidanceOptions.infrastructure.bridges) riskAdjustment += 20;
-        if (avoidanceOptions.infrastructure.tunnels) riskAdjustment += 15;
-        if (avoidanceOptions.infrastructure.narrowRoads) riskAdjustment += 10;
-        
-        if (avoidanceOptions.settlements.villages) riskAdjustment += 10;
-        if (avoidanceOptions.settlements.urbanAreas) riskAdjustment += 20;
-        if (avoidanceOptions.settlements.checkpoints) riskAdjustment += 30;
-        
-        if (convoySpecs.size === 'large') riskAdjustment += 15;
-        if (convoySpecs.specialEquipment) riskAdjustment += 10;
-        
-        const baseRiskScore = calculateRiskScore(riskFactors);
-        const adjustedRiskScore = Math.min(100, baseRiskScore + riskAdjustment * (index === 0 ? 0.5 : 1));
+        const riskScore = calculateRiskScore(riskFactors);
         
         return {
           route,
           distance,
           time,
-          riskScore: adjustedRiskScore,
+          riskScore,
           routeIndex: index
         };
       });
       
-      let sortedRoutes;
+      // Sort routes based on safety preference
+      // If safety is preferred, prioritize lower risk scores
+      // If speed is preferred, prioritize lower travel time
+      const sortedRoutes = [...routesWithMetrics].sort((a, b) => {
+        // Create a weighted score based on safety preference
+        const aScore = (a.riskScore * (safetyPreference / 100)) + (a.time * (1 - safetyPreference / 100));
+        const bScore = (b.riskScore * (safetyPreference / 100)) + (b.time * (1 - safetyPreference / 100));
+        return aScore - bScore;
+      });
       
-      if (prioritizeSafety) {
-        sortedRoutes = [...routesWithMetrics].sort((a, b) => a.riskScore - b.riskScore);
-      } else {
-        sortedRoutes = [...routesWithMetrics].sort((a, b) => {
-          const aScore = (a.riskScore * (safetyPreference / 100)) + (a.time * (1 - safetyPreference / 100));
-          const bScore = (b.riskScore * (safetyPreference / 100)) + (b.time * (1 - safetyPreference / 100));
-          return aScore - bScore;
-        });
-      }
-      
+      // Set the best route as the first one
       setSelectedRouteIndex(sortedRoutes[0].routeIndex);
       
+      // Store alternative routes for display
       setAlternativeRoutes(sortedRoutes);
       
+      // Select the best route metrics for display
       const bestRoute = sortedRoutes[0];
       
-      let fuelConsumptionMultiplier = 1.0;
-      if (convoySpecs.size === 'large') fuelConsumptionMultiplier = 1.5;
-      else if (convoySpecs.size === 'small') fuelConsumptionMultiplier = 0.8;
-      
-      if (convoySpecs.cargo === 'heavy') fuelConsumptionMultiplier *= 1.3;
-      else if (convoySpecs.cargo === 'light') fuelConsumptionMultiplier *= 0.9;
-      
-      const avgFuelConsumptionPerKm = 0.3 * fuelConsumptionMultiplier;
+      // Calculate fuel consumption (simplified)
+      const avgFuelConsumptionPerKm = 0.3; // liters per km
       const fuelUsage = bestRoute.distance * avgFuelConsumptionPerKm;
       
+      // Calculate savings compared to average of other routes
       const otherRoutes = sortedRoutes.slice(1);
       const avgOtherDistance = otherRoutes.reduce((sum, r) => sum + r.distance, 0) / otherRoutes.length;
       const avgOtherTime = otherRoutes.reduce((sum, r) => sum + r.time, 0) / otherRoutes.length;
@@ -261,6 +165,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
       
       setIsOptimizing(false);
       
+      // Notify the change
       onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, sortedRoutes[0].routeIndex);
       
       toast.success('Routes optimized successfully');
@@ -270,6 +175,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const handleRouteSelection = (routeIndex: number) => {
     setSelectedRouteIndex(routeIndex);
     
+    // Notify parent component of route change
     if (startLocation && endLocation) {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
@@ -277,32 +183,6 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
       
       onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, routeIndex);
     }
-  };
-  
-  const handleConvoySizeChange = (size: 'small' | 'medium' | 'large') => {
-    const vehicleCount = size === 'small' ? 3 : size === 'medium' ? 5 : 10;
-    const personnelCount = size === 'small' ? 12 : size === 'medium' ? 20 : 40;
-    
-    setConvoySpecs(prev => ({
-      ...prev,
-      size,
-      vehicles: vehicleCount,
-      personnel: personnelCount
-    }));
-  };
-  
-  const toggleAvoidanceOption = (
-    category: 'terrain' | 'infrastructure' | 'settlements',
-    option: string,
-    value: boolean
-  ) => {
-    setAvoidanceOptions(prev => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        [option]: value
-      }
-    }));
   };
   
   const getSafetySpeedPreferenceLabel = () => {
@@ -393,198 +273,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           </div>
         ))}
         
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="convoy-specifications">
-            <AccordionTrigger className="text-sm font-medium text-gray-700">
-              <div className="flex items-center gap-2">
-                <TruckIcon size={16} />
-                Convoy Specifications
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-4 pt-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Convoy Size
-                  </label>
-                  <Select 
-                    value={convoySpecs.size} 
-                    onValueChange={(value: 'small' | 'medium' | 'large') => handleConvoySizeChange(value)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select convoy size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small (3 vehicles, 12 personnel)</SelectItem>
-                      <SelectItem value="medium">Medium (5 vehicles, 20 personnel)</SelectItem>
-                      <SelectItem value="large">Large (10 vehicles, 40 personnel)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cargo Type
-                  </label>
-                  <Select 
-                    value={convoySpecs.cargo} 
-                    onValueChange={(value: 'light' | 'medium' | 'heavy') => setConvoySpecs(prev => ({...prev, cargo: value}))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select cargo type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light Cargo</SelectItem>
-                      <SelectItem value="medium">Medium Cargo</SelectItem>
-                      <SelectItem value="heavy">Heavy Cargo/Equipment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="special-equipment" 
-                    checked={convoySpecs.specialEquipment}
-                    onCheckedChange={(checked) => setConvoySpecs(prev => ({...prev, specialEquipment: checked === true}))}
-                  />
-                  <label
-                    htmlFor="special-equipment"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Special/Sensitive Equipment
-                  </label>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-          
-          <AccordionItem value="avoidance-options">
-            <AccordionTrigger className="text-sm font-medium text-gray-700">
-              <div className="flex items-center gap-2">
-                <AlertTriangleIcon size={16} />
-                Threat Avoidance Options
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-3 pt-2">
-                <div>
-                  <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
-                    <MountainIcon size={14} /> Terrain
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-dense-terrain" 
-                        checked={avoidanceOptions.terrain.denseTerrain}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('terrain', 'denseTerrain', checked === true)}
-                      />
-                      <label htmlFor="avoid-dense-terrain" className="text-sm">
-                        Dense Terrain
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-mountains" 
-                        checked={avoidanceOptions.terrain.mountains}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('terrain', 'mountains', checked === true)}
-                      />
-                      <label htmlFor="avoid-mountains" className="text-sm">
-                        Mountains
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-forests" 
-                        checked={avoidanceOptions.terrain.forests}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('terrain', 'forests', checked === true)}
-                      />
-                      <label htmlFor="avoid-forests" className="text-sm">
-                        Forests
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
-                    <BridgeIcon size={14} /> Infrastructure
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-bridges" 
-                        checked={avoidanceOptions.infrastructure.bridges}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('infrastructure', 'bridges', checked === true)}
-                      />
-                      <label htmlFor="avoid-bridges" className="text-sm">
-                        Bridges
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-tunnels" 
-                        checked={avoidanceOptions.infrastructure.tunnels}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('infrastructure', 'tunnels', checked === true)}
-                      />
-                      <label htmlFor="avoid-tunnels" className="text-sm">
-                        Tunnels
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-narrow-roads" 
-                        checked={avoidanceOptions.infrastructure.narrowRoads}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('infrastructure', 'narrowRoads', checked === true)}
-                      />
-                      <label htmlFor="avoid-narrow-roads" className="text-sm">
-                        Narrow Roads
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
-                    <HomeIcon size={14} /> Settlements
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-villages" 
-                        checked={avoidanceOptions.settlements.villages}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('settlements', 'villages', checked === true)}
-                      />
-                      <label htmlFor="avoid-villages" className="text-sm">
-                        Villages
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-urban-areas" 
-                        checked={avoidanceOptions.settlements.urbanAreas}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('settlements', 'urbanAreas', checked === true)}
-                      />
-                      <label htmlFor="avoid-urban-areas" className="text-sm">
-                        Urban Areas
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="avoid-checkpoints" 
-                        checked={avoidanceOptions.settlements.checkpoints}
-                        onCheckedChange={(checked) => toggleAvoidanceOption('settlements', 'checkpoints', checked === true)}
-                      />
-                      <label htmlFor="avoid-checkpoints" className="text-sm">
-                        Checkpoints
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-        
+        {/* Safety vs Speed Preference Slider */}
         <div className="pt-3 pb-1">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Route Preference: {getSafetySpeedPreferenceLabel()}
@@ -606,20 +295,6 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
             <span>Balanced</span>
             <span>Safety</span>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-2 pt-1">
-          <Checkbox 
-            id="safest-route" 
-            checked={prioritizeSafety}
-            onCheckedChange={(checked) => setPrioritizeSafety(checked === true)}
-          />
-          <label
-            htmlFor="safest-route"
-            className="text-sm font-medium leading-none text-gray-700"
-          >
-            Always choose safest route (ignores speed preference)
-          </label>
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
@@ -650,6 +325,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           </Button>
         </div>
         
+        {/* Alternative Routes Selection */}
         {alternativeRoutes.length > 0 && (
           <div className="mt-4 bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-gray-100 animate-fade-in">
             <h3 className="font-medium text-convoy-text mb-3 flex items-center gap-1.5">
@@ -674,22 +350,17 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
                     <div className="flex justify-between items-center">
                       <div className="font-medium">
                         Route {index + 1}
-                        {index === 0 && prioritizeSafety && (
+                        {index === 0 && safetyPreference > 50 && (
                           <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                             Safest
                           </span>
                         )}
-                        {index === 0 && !prioritizeSafety && safetyPreference > 50 && (
-                          <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                            Safer
-                          </span>
-                        )}
-                        {index === 0 && !prioritizeSafety && safetyPreference < 50 && (
+                        {index === 0 && safetyPreference < 50 && (
                           <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                            Faster
+                            Fastest
                           </span>
                         )}
-                        {index === 0 && !prioritizeSafety && safetyPreference === 50 && (
+                        {index === 0 && safetyPreference === 50 && (
                           <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
                             Balanced
                           </span>
