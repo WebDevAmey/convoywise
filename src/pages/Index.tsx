@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import NavBar from '@/components/NavBar';
 import Hero from '@/components/Hero';
 import MapView from '@/components/MapView';
-import RouteOptimizer from '@/components/RouteOptimizer';
+import RouteOptimizer from '@/components/route-optimizer';
 import AnimatedTransition from '@/components/AnimatedTransition';
 import { getSampleLocations } from '@/utils/mapUtils';
 import { MapIcon } from 'lucide-react';
