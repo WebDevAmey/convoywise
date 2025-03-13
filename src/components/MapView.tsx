@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -18,6 +17,7 @@ interface MapViewProps {
   selectedRouteIndex?: number;
   className?: string;
   safetyPreference?: number; // 0-100, 100 means maximum safety
+  avoidBridges?: boolean;
 }
 
 const MapView: React.FC<MapViewProps> = ({
@@ -29,6 +29,7 @@ const MapView: React.FC<MapViewProps> = ({
   showAlternativeRoutes = true,
   selectedRouteIndex = 0,
   safetyPreference = 50,
+  avoidBridges = false,
   className = ''
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -83,7 +84,7 @@ const MapView: React.FC<MapViewProps> = ({
       // Combine all routes, with the optimized route first
       setRoutes([optimizedRoute, ...alternativeRoutes]);
     }
-  }, [startPoint, endPoint, waypoints, riskAreas, safetyPreference]);
+  }, [startPoint, endPoint, waypoints, riskAreas, safetyPreference, avoidBridges]);
 
   // Draw routes and markers when data changes
   useEffect(() => {
@@ -394,6 +395,12 @@ const MapView: React.FC<MapViewProps> = ({
             <div className="w-3 h-3 rounded-full bg-red-400/40 border border-red-400"></div>
             <span>Risk Area</span>
           </div>
+          {avoidBridges && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-400/40 border border-blue-400"></div>
+              <span>Bridge Avoidance Active</span>
+            </div>
+          )}
         </div>
       </div>
       

@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCcwIcon, PlusIcon, TrashIcon, ChevronRightIcon, CalculatorIcon, ShieldIcon, ZapIcon, BarChart2Icon } from 'lucide-react';
+import { 
+  RefreshCcwIcon, 
+  PlusIcon, 
+  TrashIcon, 
+  ChevronRightIcon, 
+  CalculatorIcon, 
+  ShieldIcon, 
+  ZapIcon, 
+  BarChart2Icon,
+  AnchorIcon
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   getSampleLocations, 
@@ -13,6 +23,7 @@ import {
 import { generateRiskFactors, calculateRiskScore, getRiskLevel, getRiskColor } from '@/utils/riskAnalysisUtils';
 import AnimatedTransition from './AnimatedTransition';
 import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface RouteOptimizerProps {
   onRouteChange?: (
@@ -20,7 +31,8 @@ interface RouteOptimizerProps {
     endPoint: [number, number], 
     waypoints: Array<[number, number]>,
     safetyPreference?: number,
-    selectedRouteIndex?: number
+    selectedRouteIndex?: number,
+    avoidBridges?: boolean
   ) => void;
   className?: string;
 }
@@ -36,6 +48,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const [waypoints, setWaypoints] = useState<string[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [safetyPreference, setSafetyPreference] = useState(50); // 0-100 scale (0: speed, 100: safety)
+  const [avoidBridges, setAvoidBridges] = useState(false);
   const [alternativeRoutes, setAlternativeRoutes] = useState<Array<{
     distance: number;
     time: number;
@@ -52,13 +65,11 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
     timeSavings: number;
   } | null>(null);
   
-  // Convert location names to coordinates
   const getCoordinates = (locationName: string): [number, number] => {
     const location = locations.find(loc => loc.name === locationName);
     return location ? location.coordinates as [number, number] : [0, 0];
   };
   
-  // Initialize with default values
   useEffect(() => {
     if (locations.length >= 2) {
       setStartLocation(locations[0].name);
@@ -66,20 +77,18 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
     }
   }, []);
   
-  // Notify parent component when route changes
   useEffect(() => {
     if (startLocation && endLocation) {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, selectedRouteIndex);
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, selectedRouteIndex, avoidBridges);
     }
-  }, [startLocation, endLocation, waypoints, safetyPreference, selectedRouteIndex, onRouteChange]);
+  }, [startLocation, endLocation, waypoints, safetyPreference, selectedRouteIndex, avoidBridges, onRouteChange]);
   
   const handleAddWaypoint = () => {
     if (waypoints.length < 3) {
-      // Find locations not already used
       const usedLocations = [startLocation, endLocation, ...waypoints];
       const availableLocations = locations.filter(loc => !usedLocations.includes(loc.name));
       
@@ -100,21 +109,25 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const handleOptimizeRoute = () => {
     setIsOptimizing(true);
     
-    // Simulate optimization process
     setTimeout(() => {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      // Generate multiple route options (3 alternatives)
       const routes = generateAlternativeRoutes(startCoords, endCoords, [], 3);
       
-      // Calculate metrics for each route
       const routesWithMetrics = routes.map((route, index) => {
         const distance = calculateRouteTotalDistance(route);
-        const time = estimateTravelTime(distance, safetyPreference < 30 ? 70 : 60); // Higher speed for speed preference
+        const speedPenalty = avoidBridges && safetyPreference > 30 ? 0.85 : 1;
+        const speed = safetyPreference < 30 ? 70 : 60;
+        const time = estimateTravelTime(distance, speed * speedPenalty);
+        
         const riskFactors = generateRiskFactors(route);
-        const riskScore = calculateRiskScore(riskFactors);
+        let riskScore = calculateRiskScore(riskFactors);
+        
+        if (avoidBridges) {
+          riskScore = riskScore * 0.8;
+        }
         
         return {
           route,
@@ -125,30 +138,23 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
         };
       });
       
-      // Sort routes based on safety preference
-      // If safety is preferred, prioritize lower risk scores
-      // If speed is preferred, prioritize lower travel time
       const sortedRoutes = [...routesWithMetrics].sort((a, b) => {
-        // Create a weighted score based on safety preference
-        const aScore = (a.riskScore * (safetyPreference / 100)) + (a.time * (1 - safetyPreference / 100));
-        const bScore = (b.riskScore * (safetyPreference / 100)) + (b.time * (1 - safetyPreference / 100));
+        const bridgeFactor = avoidBridges ? 0.2 : 0;
+        const aScore = (a.riskScore * ((safetyPreference / 100) + bridgeFactor)) + 
+                      (a.time * (1 - (safetyPreference / 100) - bridgeFactor));
+        const bScore = (b.riskScore * ((safetyPreference / 100) + bridgeFactor)) + 
+                      (b.time * (1 - (safetyPreference / 100) - bridgeFactor));
         return aScore - bScore;
       });
       
-      // Set the best route as the first one
       setSelectedRouteIndex(sortedRoutes[0].routeIndex);
-      
-      // Store alternative routes for display
       setAlternativeRoutes(sortedRoutes);
       
-      // Select the best route metrics for display
       const bestRoute = sortedRoutes[0];
       
-      // Calculate fuel consumption (simplified)
-      const avgFuelConsumptionPerKm = 0.3; // liters per km
+      const avgFuelConsumptionPerKm = 0.3;
       const fuelUsage = bestRoute.distance * avgFuelConsumptionPerKm;
       
-      // Calculate savings compared to average of other routes
       const otherRoutes = sortedRoutes.slice(1);
       const avgOtherDistance = otherRoutes.reduce((sum, r) => sum + r.distance, 0) / otherRoutes.length;
       const avgOtherTime = otherRoutes.reduce((sum, r) => sum + r.time, 0) / otherRoutes.length;
@@ -165,8 +171,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
       
       setIsOptimizing(false);
       
-      // Notify the change
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, sortedRoutes[0].routeIndex);
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, sortedRoutes[0].routeIndex, avoidBridges);
       
       toast.success('Routes optimized successfully');
     }, 1500);
@@ -175,13 +180,12 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
   const handleRouteSelection = (routeIndex: number) => {
     setSelectedRouteIndex(routeIndex);
     
-    // Notify parent component of route change
     if (startLocation && endLocation) {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, routeIndex);
+      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, routeIndex, avoidBridges);
     }
   };
   
@@ -273,7 +277,21 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           </div>
         ))}
         
-        {/* Safety vs Speed Preference Slider */}
+        <div className="flex items-center space-x-2 mt-1 mb-1">
+          <Checkbox 
+            id="avoidBridges" 
+            checked={avoidBridges}
+            onCheckedChange={(checked) => setAvoidBridges(checked === true)}
+          />
+          <label
+            htmlFor="avoidBridges"
+            className="text-sm font-medium leading-none flex items-center gap-1.5 peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            <AnchorIcon size={14} className="text-convoy-primary" />
+            Avoid bridges (reduces risk, may increase travel time)
+          </label>
+        </div>
+        
         <div className="pt-3 pb-1">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Route Preference: {getSafetySpeedPreferenceLabel()}
@@ -325,7 +343,6 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           </Button>
         </div>
         
-        {/* Alternative Routes Selection */}
         {alternativeRoutes.length > 0 && (
           <div className="mt-4 bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-gray-100 animate-fade-in">
             <h3 className="font-medium text-convoy-text mb-3 flex items-center gap-1.5">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import NavBar from '@/components/NavBar';
 import Hero from '@/components/Hero';
@@ -6,6 +5,7 @@ import MapView from '@/components/MapView';
 import RouteOptimizer from '@/components/RouteOptimizer';
 import AnimatedTransition from '@/components/AnimatedTransition';
 import { getSampleLocations } from '@/utils/mapUtils';
+import { MapIcon } from 'lucide-react';
 
 const Index = () => {
   const locations = getSampleLocations();
@@ -17,13 +17,15 @@ const Index = () => {
   const [endLocation, setEndLocation] = useState(locations[1].name);
   const [safetyPreference, setSafetyPreference] = useState(50);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [avoidBridges, setAvoidBridges] = useState(false);
   
   const handleRouteChange = (
     start: [number, number], 
     end: [number, number], 
     points: Array<[number, number]>,
     safety?: number,
-    routeIndex?: number
+    routeIndex?: number,
+    bridges?: boolean
   ) => {
     setStartPoint(start);
     setEndPoint(end);
@@ -35,6 +37,10 @@ const Index = () => {
     
     if (routeIndex !== undefined) {
       setSelectedRouteIndex(routeIndex);
+    }
+    
+    if (bridges !== undefined) {
+      setAvoidBridges(bridges);
     }
     
     // Update location names
@@ -77,6 +83,7 @@ const Index = () => {
                 showAlternativeRoutes={true}
                 selectedRouteIndex={selectedRouteIndex}
                 safetyPreference={safetyPreference}
+                avoidBridges={avoidBridges}
                 className="h-[600px]"
               />
             </div>
@@ -144,9 +151,6 @@ const Index = () => {
     </div>
   );
 };
-
-// Import at the top of the file
-import { MapIcon } from 'lucide-react';
 
 interface FeatureCardProps {
   title: string;
