@@ -8,6 +8,7 @@ import AnimatedTransition from '@/components/AnimatedTransition';
 import { getSampleLocations } from '@/utils/mapUtils';
 import { MapIcon } from 'lucide-react';
 import { AvoidOptions, ConvoySize } from '@/components/route-optimizer/types';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 const Index = () => {
   const locations = getSampleLocations();
@@ -94,8 +95,16 @@ const Index = () => {
             </p>
           </AnimatedTransition>
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+          <ResizablePanelGroup direction="horizontal" className="min-h-[600px] rounded-lg border">
+            <ResizablePanel defaultSize={50} minSize={30}>
+              <div className="h-[600px]">
+                <RouteOptimizer onRouteChange={handleRouteChange} className="h-full" />
+              </div>
+            </ResizablePanel>
+            
+            <ResizableHandle withHandle />
+            
+            <ResizablePanel defaultSize={50} minSize={30}>
               <MapView 
                 startPoint={startPoint}
                 endPoint={endPoint}
@@ -107,12 +116,8 @@ const Index = () => {
                 avoidBridges={avoidBridges}
                 className="h-[600px]"
               />
-            </div>
-            
-            <div className="space-y-6">
-              <RouteOptimizer onRouteChange={handleRouteChange} />
-            </div>
-          </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </section>
         
         <section className="mb-20">
