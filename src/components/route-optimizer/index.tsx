@@ -1,7 +1,6 @@
 
 import React from 'react';
 import AnimatedTransition from '@/components/AnimatedTransition';
-import RouteOptionControls from './RouteOptionControls';
 import RouteAlternatives from './RouteAlternatives';
 import OptimizationResults from './OptimizationResults';
 import { useRouteOptimizer } from './useRouteOptimizer';

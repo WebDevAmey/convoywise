@@ -14,7 +14,6 @@ import {
   MountainIcon,
   BuildingIcon,
   WavesIcon,
-  RoadIcon,
   SplitIcon
 } from 'lucide-react';
 import { getSampleLocations } from '@/utils/mapUtils';
@@ -243,7 +242,6 @@ const ConvoyPlannerForm: React.FC<ConvoyPlannerFormProps> = ({
               htmlFor="avoid-unpaved-roads"
               className="text-sm flex items-center gap-1.5"
             >
-              <RoadIcon size={14} className="text-primary" />
               Unpaved Roads
             </Label>
           </div>
