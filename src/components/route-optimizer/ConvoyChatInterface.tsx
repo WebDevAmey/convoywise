@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TruckIcon, SendIcon } from 'lucide-react';
 import { ConvoySize, AvoidOptions } from './types';
-import { getSampleLocations } from '@/utils/mapUtils';
 
 interface Message {
   role: 'system' | 'user';
@@ -49,7 +48,6 @@ const ConvoyChatInterface: React.FC<ConvoyChatInterfaceProps> = ({
   const [currentInput, setCurrentInput] = useState('');
   const [currentStep, setCurrentStep] = useState<'start' | 'end' | 'size' | 'priority' | 'avoid' | 'done'>('start');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const locations = getSampleLocations();
 
   // Initial system message when component loads
   useEffect(() => {
@@ -58,23 +56,8 @@ const ConvoyChatInterface: React.FC<ConvoyChatInterfaceProps> = ({
         role: 'system',
         content: (
           <div>
-            <p>Welcome to ConvoyWise Planner. Let's plan your convoy route.</p>
-            <p className="mt-2">What is your <strong>starting location</strong>?</p>
-            <div className="mt-3">
-              <div className="grid grid-cols-2 gap-2">
-                {locations.slice(0, 4).map((loc) => (
-                  <Button 
-                    key={loc.name} 
-                    variant="outline" 
-                    size="sm" 
-                    className="justify-start"
-                    onClick={() => handleLocationSelect(loc.name)}
-                  >
-                    {loc.name}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <p>Welcome to ConvoyWise Planner for India. Let's plan your convoy route.</p>
+            <p className="mt-2">Please enter your <strong>starting location</strong> in India:</p>
           </div>
         )
       }
@@ -86,99 +69,81 @@ const ConvoyChatInterface: React.FC<ConvoyChatInterfaceProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle location selection
-  const handleLocationSelect = (location: string) => {
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentInput.trim()) return;
+
     if (currentStep === 'start') {
-      onStartLocationChange(location);
+      onStartLocationChange(currentInput);
       setMessages([
         ...messages,
-        { role: 'user', content: `Starting from: ${location}` },
+        { role: 'user', content: currentInput },
         { 
           role: 'system', 
           content: (
             <div>
-              <p>Great! Now, what is your <strong>destination</strong>?</p>
-              <div className="mt-3">
-                <div className="grid grid-cols-2 gap-2">
-                  {locations
-                    .filter(loc => loc.name !== location)
-                    .slice(0, 4)
-                    .map((loc) => (
-                      <Button 
-                        key={loc.name} 
-                        variant="outline" 
-                        size="sm" 
-                        className="justify-start"
-                        onClick={() => handleDestinationSelect(loc.name)}
-                      >
-                        {loc.name}
-                      </Button>
-                    ))}
-                </div>
-              </div>
+              <p>Great! Now, please enter your <strong>destination</strong> in India:</p>
             </div>
           )
         }
       ]);
       setCurrentStep('end');
-      setCurrentInput('');
-    }
-  };
-
-  // Handle destination selection
-  const handleDestinationSelect = (location: string) => {
-    onEndLocationChange(location);
-    setMessages([
-      ...messages,
-      { role: 'user', content: `Destination: ${location}` },
-      { 
-        role: 'system', 
-        content: (
-          <div>
-            <p>What <strong>size</strong> is your convoy?</p>
-            <div className="mt-3">
-              <RadioGroup
-                value={convoySize}
-                onValueChange={(value) => handleConvoySizeSelect(value as ConvoySize)}
-                className="flex flex-col space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="small" id="convoy-small" />
-                  <Label htmlFor="convoy-small" className="flex items-center gap-2">
-                    <TruckIcon size={14} /> Small (1-3 vehicles)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="medium" id="convoy-medium" />
-                  <Label htmlFor="convoy-medium" className="flex items-center gap-2">
-                    <TruckIcon size={16} /> Medium (4-7 vehicles)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="large" id="convoy-large" />
-                  <Label htmlFor="convoy-large" className="flex items-center gap-2">
-                    <TruckIcon size={18} /> Large (8-12 vehicles)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="extra-large" id="convoy-xl" />
-                  <Label htmlFor="convoy-xl" className="flex items-center gap-2">
-                    <TruckIcon size={20} /> Extra Large (13-20 vehicles)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="massive" id="convoy-massive" />
-                  <Label htmlFor="convoy-massive" className="flex items-center gap-2">
-                    <TruckIcon size={22} /> Massive (21+ vehicles)
-                  </Label>
-                </div>
-              </RadioGroup>
+    } else if (currentStep === 'end') {
+      onEndLocationChange(currentInput);
+      setMessages([
+        ...messages,
+        { role: 'user', content: currentInput },
+        { 
+          role: 'system', 
+          content: (
+            <div>
+              <p>What <strong>size</strong> is your convoy?</p>
+              <div className="mt-3">
+                <RadioGroup
+                  value={convoySize}
+                  onValueChange={(value) => handleConvoySizeSelect(value as ConvoySize)}
+                  className="flex flex-col space-y-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="small" id="convoy-small" />
+                    <Label htmlFor="convoy-small" className="flex items-center gap-2">
+                      <TruckIcon size={14} /> Small (1-3 vehicles)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="medium" id="convoy-medium" />
+                    <Label htmlFor="convoy-medium" className="flex items-center gap-2">
+                      <TruckIcon size={16} /> Medium (4-7 vehicles)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="large" id="convoy-large" />
+                    <Label htmlFor="convoy-large" className="flex items-center gap-2">
+                      <TruckIcon size={18} /> Large (8-12 vehicles)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="extra-large" id="convoy-xl" />
+                    <Label htmlFor="convoy-xl" className="flex items-center gap-2">
+                      <TruckIcon size={20} /> Extra Large (13-20 vehicles)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="massive" id="convoy-massive" />
+                    <Label htmlFor="convoy-massive" className="flex items-center gap-2">
+                      <TruckIcon size={22} /> Massive (21+ vehicles)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
-          </div>
-        ) 
-      }
-    ]);
-    setCurrentStep('size');
+          ) 
+        }
+      ]);
+      setCurrentStep('size');
+    }
+    setCurrentInput('');
   };
 
   // Handle convoy size selection
@@ -365,32 +330,6 @@ const ConvoyChatInterface: React.FC<ConvoyChatInterfaceProps> = ({
     setCurrentInput(e.target.value);
   };
 
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentInput.trim()) return;
-
-    if (currentStep === 'start') {
-      const validLocation = locations.find(loc => 
-        loc.name.toLowerCase() === currentInput.toLowerCase()
-      );
-      
-      if (validLocation) {
-        handleLocationSelect(validLocation.name);
-      } else {
-        setMessages([
-          ...messages,
-          { role: 'user', content: currentInput },
-          { 
-            role: 'system', 
-            content: "I couldn't find that location in our database. Please select from one of the suggested locations." 
-          }
-        ]);
-      }
-    }
-    setCurrentInput('');
-  };
-
   // Update messages when optimization completes
   useEffect(() => {
     if (currentStep === 'done' && !isOptimizing && optimizationComplete) {
@@ -439,16 +378,18 @@ const ConvoyChatInterface: React.FC<ConvoyChatInterfaceProps> = ({
             onChange={handleInputChange}
             placeholder={
               currentStep === 'start' 
-                ? "Type a starting location..."
+                ? "Enter starting location in India..."
+                : currentStep === 'end'
+                ? "Enter destination in India..."
                 : "Type your message..."
             }
-            disabled={currentStep !== 'start' || isOptimizing}
+            disabled={currentStep !== 'start' && currentStep !== 'end' || isOptimizing}
             className="flex-1"
           />
           <Button 
             type="submit" 
             size="icon"
-            disabled={currentStep !== 'start' || !currentInput || isOptimizing}
+            disabled={(currentStep !== 'start' && currentStep !== 'end') || !currentInput || isOptimizing}
           >
             <SendIcon size={18} />
           </Button>
