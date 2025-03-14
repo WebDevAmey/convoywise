@@ -23,7 +23,21 @@ export interface RouteOptimizerProps {
     waypoints: Array<[number, number]>,
     safetyPreference?: number,
     selectedRouteIndex?: number,
-    avoidBridges?: boolean
+    avoidBridges?: boolean,
+    convoySize?: string,
+    avoidOptions?: AvoidOptions
   ) => void;
   className?: string;
 }
+
+export interface AvoidOptions {
+  bridges: boolean;
+  hillTerrain: boolean;
+  urbanAreas: boolean;
+  waterCrossings: boolean;
+  narrowRoads: boolean;
+  unpavedRoads: boolean;
+}
+
+export type ConvoySize = 'small' | 'medium' | 'large' | 'extra-large' | 'massive';
+

@@ -6,6 +6,7 @@ import RouteAlternatives from './RouteAlternatives';
 import OptimizationResults from './OptimizationResults';
 import { useRouteOptimizer } from './useRouteOptimizer';
 import { RouteOptimizerProps } from './types';
+import ConvoyPlannerForm from './ConvoyPlannerForm';
 
 const RouteOptimizer: React.FC<RouteOptimizerProps> = ({ 
   onRouteChange,
@@ -21,10 +22,14 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
     alternativeRoutes,
     selectedRouteIndex,
     optimizationResult,
+    convoySize,
+    avoidOptions,
     setStartLocation,
     setEndLocation,
     setSafetyPreference,
     setAvoidBridges,
+    setConvoySize,
+    setAvoidOptions,
     handleAddWaypoint,
     handleRemoveWaypoint,
     handleWaypointChange,
@@ -34,22 +39,20 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
 
   return (
     <AnimatedTransition className={`panel p-6 ${className}`}>
-      <h2 className="text-lg font-semibold mb-4 text-convoy-text">Route Optimizer</h2>
+      <h2 className="text-lg font-semibold mb-4 text-convoy-text">Convoy Route Planner</h2>
       
-      <RouteOptionControls
+      <ConvoyPlannerForm
         startLocation={startLocation}
         endLocation={endLocation}
-        waypoints={waypoints}
+        convoySize={convoySize}
         safetyPreference={safetyPreference}
-        avoidBridges={avoidBridges}
+        avoidOptions={avoidOptions}
         isOptimizing={isOptimizing}
         onStartLocationChange={setStartLocation}
         onEndLocationChange={setEndLocation}
-        onWaypointChange={handleWaypointChange}
-        onAddWaypoint={handleAddWaypoint}
-        onRemoveWaypoint={handleRemoveWaypoint}
+        onConvoySizeChange={setConvoySize}
         onSafetyPreferenceChange={setSafetyPreference}
-        onAvoidBridgesChange={setAvoidBridges}
+        onAvoidOptionsChange={setAvoidOptions}
         onOptimizeRoute={handleOptimizeRoute}
       />
       

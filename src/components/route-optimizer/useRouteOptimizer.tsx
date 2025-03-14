@@ -8,7 +8,7 @@ import {
   generateAlternativeRoutes
 } from '@/utils/mapUtils';
 import { generateRiskFactors, calculateRiskScore } from '@/utils/riskAnalysisUtils';
-import { RouteAlternative, OptimizationResultType } from './types';
+import { RouteAlternative, OptimizationResultType, AvoidOptions, ConvoySize } from './types';
 
 export function useRouteOptimizer(onRouteChange?: (
   startPoint: [number, number], 
@@ -16,7 +16,9 @@ export function useRouteOptimizer(onRouteChange?: (
   waypoints: Array<[number, number]>,
   safetyPreference?: number,
   selectedRouteIndex?: number,
-  avoidBridges?: boolean
+  avoidBridges?: boolean,
+  convoySize?: string,
+  avoidOptions?: AvoidOptions
 ) => void) {
   const locations = getSampleLocations();
   
@@ -26,6 +28,15 @@ export function useRouteOptimizer(onRouteChange?: (
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [safetyPreference, setSafetyPreference] = useState(50);
   const [avoidBridges, setAvoidBridges] = useState(false);
+  const [convoySize, setConvoySize] = useState<ConvoySize>('medium');
+  const [avoidOptions, setAvoidOptions] = useState<AvoidOptions>({
+    bridges: false,
+    hillTerrain: false,
+    urbanAreas: false,
+    waterCrossings: false,
+    narrowRoads: false,
+    unpavedRoads: false
+  });
   const [alternativeRoutes, setAlternativeRoutes] = useState<RouteAlternative[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResultType | null>(null);
@@ -38,14 +49,38 @@ export function useRouteOptimizer(onRouteChange?: (
   }, []);
   
   useEffect(() => {
+    // Update avoidBridges when avoidOptions.bridges changes
+    setAvoidBridges(avoidOptions.bridges);
+  }, [avoidOptions.bridges]);
+  
+  useEffect(() => {
     if (startLocation && endLocation) {
       const startCoords = getCoordinates(startLocation);
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, selectedRouteIndex, avoidBridges);
+      onRouteChange?.(
+        startCoords, 
+        endCoords, 
+        waypointCoords, 
+        safetyPreference, 
+        selectedRouteIndex, 
+        avoidBridges,
+        convoySize,
+        avoidOptions
+      );
     }
-  }, [startLocation, endLocation, waypoints, safetyPreference, selectedRouteIndex, avoidBridges, onRouteChange]);
+  }, [
+    startLocation, 
+    endLocation, 
+    waypoints, 
+    safetyPreference, 
+    selectedRouteIndex, 
+    avoidBridges, 
+    convoySize, 
+    avoidOptions, 
+    onRouteChange
+  ]);
   
   const getCoordinates = (locationName: string): [number, number] => {
     const location = locations.find(loc => loc.name === locationName);
@@ -83,16 +118,38 @@ export function useRouteOptimizer(onRouteChange?: (
       
       const routesWithMetrics = routes.map((route, index) => {
         const distance = calculateRouteTotalDistance(route);
-        const speedPenalty = avoidBridges && safetyPreference > 30 ? 0.85 : 1;
-        const speed = safetyPreference < 30 ? 70 : 60;
-        const time = estimateTravelTime(distance, speed * speedPenalty);
+        
+        // Apply convoy size impact on speed
+        let speedFactor = 1.0;
+        switch(convoySize) {
+          case 'small': speedFactor = 1.0; break;
+          case 'medium': speedFactor = 0.95; break;
+          case 'large': speedFactor = 0.9; break;
+          case 'extra-large': speedFactor = 0.85; break;
+          case 'massive': speedFactor = 0.75; break;
+        }
+        
+        // Apply avoidance options impact on speed and risk
+        if (avoidOptions.bridges) speedFactor *= 0.95;
+        if (avoidOptions.hillTerrain) speedFactor *= 0.9;
+        if (avoidOptions.urbanAreas) speedFactor *= 0.85;
+        if (avoidOptions.waterCrossings) speedFactor *= 0.95;
+        if (avoidOptions.narrowRoads) speedFactor *= 0.9;
+        if (avoidOptions.unpavedRoads) speedFactor *= 0.8;
+        
+        const baseSpeed = safetyPreference < 30 ? 70 : 60;
+        const time = estimateTravelTime(distance, baseSpeed * speedFactor);
         
         const riskFactors = generateRiskFactors(route);
         let riskScore = calculateRiskScore(riskFactors);
         
-        if (avoidBridges) {
-          riskScore = riskScore * 0.8;
-        }
+        // Apply avoidance options impact on risk score
+        if (avoidOptions.bridges) riskScore *= 0.8;
+        if (avoidOptions.hillTerrain) riskScore *= 0.85;
+        if (avoidOptions.urbanAreas) riskScore *= 0.7;
+        if (avoidOptions.waterCrossings) riskScore *= 0.8;
+        if (avoidOptions.narrowRoads) riskScore *= 0.9;
+        if (avoidOptions.unpavedRoads) riskScore *= 0.85;
         
         return {
           route,
@@ -104,11 +161,17 @@ export function useRouteOptimizer(onRouteChange?: (
       });
       
       const sortedRoutes = [...routesWithMetrics].sort((a, b) => {
-        const bridgeFactor = avoidBridges ? 0.2 : 0;
-        const aScore = (a.riskScore * ((safetyPreference / 100) + bridgeFactor)) + 
-                      (a.time * (1 - (safetyPreference / 100) - bridgeFactor));
-        const bScore = (b.riskScore * ((safetyPreference / 100) + bridgeFactor)) + 
-                      (b.time * (1 - (safetyPreference / 100) - bridgeFactor));
+        // Calculate total avoidance factor
+        const avoidFactorCount = Object.values(avoidOptions).filter(Boolean).length;
+        const avoidFactor = avoidFactorCount > 0 ? 0.1 * avoidFactorCount : 0;
+        
+        // Combine safety preference with avoidance factors
+        const effectiveSafetyWeight = (safetyPreference / 100) + avoidFactor;
+        const speedWeight = 1 - effectiveSafetyWeight;
+        
+        const aScore = (a.riskScore * effectiveSafetyWeight) + (a.time * speedWeight);
+        const bScore = (b.riskScore * effectiveSafetyWeight) + (b.time * speedWeight);
+        
         return aScore - bScore;
       });
       
@@ -117,7 +180,17 @@ export function useRouteOptimizer(onRouteChange?: (
       
       const bestRoute = sortedRoutes[0];
       
-      const avgFuelConsumptionPerKm = 0.3;
+      // Consider convoy size for fuel consumption
+      let fuelFactor = 1.0;
+      switch(convoySize) {
+        case 'small': fuelFactor = 0.8; break;
+        case 'medium': fuelFactor = 1.0; break;
+        case 'large': fuelFactor = 1.3; break;
+        case 'extra-large': fuelFactor = 1.6; break;
+        case 'massive': fuelFactor = 2.0; break;
+      }
+      
+      const avgFuelConsumptionPerKm = 0.3 * fuelFactor;
       const fuelUsage = bestRoute.distance * avgFuelConsumptionPerKm;
       
       const otherRoutes = sortedRoutes.slice(1);
@@ -136,9 +209,18 @@ export function useRouteOptimizer(onRouteChange?: (
       
       setIsOptimizing(false);
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, sortedRoutes[0].routeIndex, avoidBridges);
+      onRouteChange?.(
+        startCoords, 
+        endCoords, 
+        waypointCoords, 
+        safetyPreference, 
+        sortedRoutes[0].routeIndex, 
+        avoidBridges, 
+        convoySize,
+        avoidOptions
+      );
       
-      toast.success('Routes optimized successfully');
+      toast.success('Route optimized successfully');
     }, 1500);
   };
   
@@ -150,7 +232,16 @@ export function useRouteOptimizer(onRouteChange?: (
       const endCoords = getCoordinates(endLocation);
       const waypointCoords = waypoints.map(wp => getCoordinates(wp));
       
-      onRouteChange?.(startCoords, endCoords, waypointCoords, safetyPreference, routeIndex, avoidBridges);
+      onRouteChange?.(
+        startCoords, 
+        endCoords, 
+        waypointCoords, 
+        safetyPreference, 
+        routeIndex, 
+        avoidBridges,
+        convoySize,
+        avoidOptions
+      );
     }
   };
   
@@ -167,6 +258,8 @@ export function useRouteOptimizer(onRouteChange?: (
     isOptimizing,
     safetyPreference,
     avoidBridges,
+    convoySize,
+    avoidOptions,
     alternativeRoutes,
     selectedRouteIndex,
     optimizationResult,
@@ -174,6 +267,8 @@ export function useRouteOptimizer(onRouteChange?: (
     setEndLocation,
     setSafetyPreference,
     setAvoidBridges,
+    setConvoySize,
+    setAvoidOptions,
     handleAddWaypoint,
     handleRemoveWaypoint,
     handleWaypointChange,

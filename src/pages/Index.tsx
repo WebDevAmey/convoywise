@@ -7,6 +7,7 @@ import RouteOptimizer from '@/components/route-optimizer';
 import AnimatedTransition from '@/components/AnimatedTransition';
 import { getSampleLocations } from '@/utils/mapUtils';
 import { MapIcon } from 'lucide-react';
+import { AvoidOptions, ConvoySize } from '@/components/route-optimizer/types';
 
 const Index = () => {
   const locations = getSampleLocations();
@@ -19,6 +20,15 @@ const Index = () => {
   const [safetyPreference, setSafetyPreference] = useState(50);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [avoidBridges, setAvoidBridges] = useState(false);
+  const [convoySize, setConvoySize] = useState<ConvoySize>('medium');
+  const [avoidOptions, setAvoidOptions] = useState<AvoidOptions>({
+    bridges: false,
+    hillTerrain: false,
+    urbanAreas: false,
+    waterCrossings: false,
+    narrowRoads: false,
+    unpavedRoads: false
+  });
   
   const handleRouteChange = (
     start: [number, number], 
@@ -26,7 +36,9 @@ const Index = () => {
     points: Array<[number, number]>,
     safety?: number,
     routeIndex?: number,
-    bridges?: boolean
+    bridges?: boolean,
+    convoy?: string,
+    avoid?: AvoidOptions
   ) => {
     setStartPoint(start);
     setEndPoint(end);
@@ -42,6 +54,14 @@ const Index = () => {
     
     if (bridges !== undefined) {
       setAvoidBridges(bridges);
+    }
+    
+    if (convoy !== undefined) {
+      setConvoySize(convoy as ConvoySize);
+    }
+    
+    if (avoid !== undefined) {
+      setAvoidOptions(avoid);
     }
     
     // Update location names
@@ -67,10 +87,10 @@ const Index = () => {
         <section id="route-planner" className="mt-16 mb-20 scroll-mt-20">
           <AnimatedTransition>
             <h2 className="text-2xl md:text-3xl font-bold text-convoy-text text-center mb-2">
-              Intelligent Route Planner
+              Intelligent Convoy Planner
             </h2>
             <p className="text-gray-600 text-center max-w-2xl mx-auto mb-12">
-              Plan and optimize your convoy routes with AI-powered analysis to maximize efficiency.
+              Plan and optimize your convoy routes with AI-powered analysis to maximize safety and efficiency.
             </p>
           </AnimatedTransition>
           
