@@ -49,7 +49,7 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
 
   return (
     <AnimatedTransition className={`panel h-full flex flex-col ${className}`}>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-auto">
         <ConvoyChatInterface
           startLocation={startLocation}
           endLocation={endLocation}
